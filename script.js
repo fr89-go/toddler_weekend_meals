@@ -370,32 +370,39 @@ const SLOTS = [
   { day: "Sunday", mealType: "dinner" }
 ];
 
+const SHOPPING_CATEGORIES = {
+  Fresh: ["banana", "apple", "peach", "pear", "spinach", "bell pepper", "carrot", "peas", "sweet potato", "zucchini", "cucumber", "broccoli", "potato", "celery", "pumpkin puree", "onion", "dill", "parsley", "cauliflower", "berries", "tomato", "lemon juice", "avocado"],
+  Fridge: ["milk", "plain yogurt", "yogurt", "cheese", "cottage cheese", "ricotta", "eggs", "egg", "chicken", "chicken breast", "ground turkey", "lean ground beef", "tofu", "salmon", "butter", "parmesan", "cheddar cheese"],
+  Cupboard: ["rolled oats", "oats", "quick oats", "small pasta", "tiny pasta", "macaroni", "quinoa", "arborio rice", "cooked rice", "rice", "small noodles", "flour", "olive oil", "chia seeds", "white beans", "hummus", "whole-wheat tortilla", "whole-grain bread", "red lentils", "lentils", "broth", "low-sodium soy sauce", "sesame oil", "cinnamon"],
+  Freezer: []
+};
 
 const form = document.querySelector("#planner-form");
 const weekendPlanEl = document.querySelector("#weekendPlan");
-const shoppingListEl = document.querySelector("#shoppingList");
+const shoppingGroupsEl = document.querySelector("#shoppingGroups");
 const prepAheadEl = document.querySelector("#prepAhead");
+const reuseTipsEl = document.querySelector("#reuseTips");
 const formMessageEl = document.querySelector("#form-message");
 const resultsEmptyEl = document.querySelector("#results-empty");
 const shoppingEmptyEl = document.querySelector("#shopping-empty");
 const prepEmptyEl = document.querySelector("#prep-empty");
+const reuseEmptyEl = document.querySelector("#reuse-empty");
 const copyButton = document.querySelector("#copy-list");
 const copyStatusEl = document.querySelector("#copy-status");
+const loadingStateEl = document.querySelector("#loading-state");
+const planButton = document.querySelector("#plan-button");
 
-let currentShoppingItems = [];
+let currentPlan = [];
+let currentShoppingGroups = {};
 
-form.addEventListener("submit", (event) => {
+form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  formMessageEl.textContent = "";
-  formMessageEl.classList.remove("error");
-  copyStatusEl.textContent = "";
+  resetMessages();
 
   const ageMonths = Number(document.querySelector("#ageMonths").value);
   const maxPrepTime = Number(document.querySelector("#maxPrepTime").value);
-  const mealPreference = document.querySelector("#mealPreference").value;
-  const ingredientsAtHome = parseCommaList(
-    document.querySelector("#ingredientsAtHome").value
-  );
+  const priorities = getSelectedPriorities();
+  const ingredientsAtHome = parseCommaList(document.querySelector("#ingredientsAtHome").value);
   const foodsToAvoid = parseCommaList(document.querySelector("#foodsToAvoid").value);
 
   if (ageMonths < 12 || ageMonths > 24) {
@@ -404,39 +411,81 @@ form.addEventListener("submit", (event) => {
     return;
   }
 
-  const plannedMeals = generateWeekendPlan({
+  showLoading(true);
+  await wait(900);
+
+  currentPlan = generateWeekendPlan({
     ageMonths,
     ingredientsAtHome,
     foodsToAvoid,
     maxPrepTime,
-    mealPreference
+    priorities
   });
 
-  renderPlan(plannedMeals);
-  renderShoppingList(buildShoppingList(plannedMeals, ingredientsAtHome));
-  renderPrepAhead(buildPrepAhead(plannedMeals));
-  formMessageEl.textContent = "Weekend plan updated.";
+  renderPlan(currentPlan, { ageMonths, maxPrepTime, priorities, foodsToAvoid, ingredientsAtHome });
+  currentShoppingGroups = buildGroupedShoppingList(currentPlan, ingredientsAtHome);
+  renderShoppingGroups(currentShoppingGroups);
+  renderPrepAhead(buildPrepAhead(currentPlan));
+  renderReuseTips(buildReuseTips(currentPlan));
+
+  showLoading(false);
+  formMessageEl.textContent = "Weekend plan updated successfully.";
   weekendPlanEl.scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
 copyButton.addEventListener("click", async () => {
-  if (!currentShoppingItems.length) {
+  copyStatusEl.classList.remove("error");
+  const text = buildShoppingCopyText(currentShoppingGroups);
+  if (!text.trim()) {
     copyStatusEl.textContent = "Nothing to copy yet.";
     copyStatusEl.classList.add("error");
     return;
   }
 
-  const listText = currentShoppingItems.map((item) => `• ${item}`).join("\n");
-
   try {
-    await navigator.clipboard.writeText(listText);
+    await navigator.clipboard.writeText(text);
     copyStatusEl.textContent = "Shopping list copied to clipboard.";
-    copyStatusEl.classList.remove("error");
   } catch {
-    copyStatusEl.textContent = "Copy failed. Select and copy items manually.";
+    copyStatusEl.textContent = "Copy failed. Please copy manually.";
     copyStatusEl.classList.add("error");
   }
 });
+
+weekendPlanEl.addEventListener("click", (event) => {
+  const stepsBtn = event.target.closest("[data-action='toggle-steps']");
+  if (stepsBtn) {
+    const mealId = Number(stepsBtn.dataset.mealId);
+    toggleSteps(mealId, stepsBtn);
+    return;
+  }
+
+  const swapBtn = event.target.closest("[data-action='swap-meal']");
+  if (swapBtn) {
+    const mealId = Number(swapBtn.dataset.mealId);
+    swapMeal(mealId);
+  }
+});
+
+function getSelectedPriorities() {
+  return [...document.querySelectorAll("input[name='priorities']:checked")].map((input) => input.value);
+}
+
+function resetMessages() {
+  formMessageEl.textContent = "";
+  formMessageEl.classList.remove("error");
+  copyStatusEl.textContent = "";
+  copyStatusEl.classList.remove("error");
+}
+
+function showLoading(isLoading) {
+  loadingStateEl.hidden = !isLoading;
+  planButton.disabled = isLoading;
+  planButton.textContent = isLoading ? "Planning..." : "Plan my weekend";
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function parseCommaList(value) {
   return value
@@ -446,46 +495,23 @@ function parseCommaList(value) {
 }
 
 function generateWeekendPlan(preferences) {
-  const { ageMonths, foodsToAvoid, maxPrepTime, mealPreference } = preferences;
+  const { ageMonths, foodsToAvoid, maxPrepTime, priorities, ingredientsAtHome } = preferences;
   const chosenNames = new Set();
 
-  return SLOTS.map((slot) => {
-    const candidates = MEALS.filter((meal) => {
-      const hasAvoidedFood = meal.ingredients.some((ingredient) =>
-        foodsToAvoid.some((avoid) => ingredient.toLowerCase().includes(avoid))
-      );
-
-      return (
-        meal.mealType === slot.mealType &&
-        meal.ageMinMonths <= ageMonths &&
-        meal.ageMaxMonths >= ageMonths &&
-        !hasAvoidedFood &&
-        meal.prepTime <= maxPrepTime
-      );
+  return SLOTS.map((slot, index) => {
+    const candidates = getCandidates(slot.mealType, {
+      ageMonths,
+      foodsToAvoid,
+      maxPrepTime,
+      priorities,
+      ingredientsAtHome
     });
 
-    const prioritized = [...candidates].sort((a, b) => {
-      const aMatch = a.tags.includes(mealPreference) ? 1 : 0;
-      const bMatch = b.tags.includes(mealPreference) ? 1 : 0;
-      if (aMatch !== bMatch) return bMatch - aMatch;
-      return a.prepTime - b.prepTime;
-    });
-
-    let selected = prioritized.find((meal) => !chosenNames.has(meal.name));
-
-    if (!selected) {
-      const fallback = MEALS.filter(
-        (meal) =>
-          meal.mealType === slot.mealType &&
-          meal.ageMinMonths <= ageMonths &&
-          meal.ageMaxMonths >= ageMonths
-      ).sort((a, b) => a.prepTime - b.prepTime);
-      selected = fallback.find((meal) => !chosenNames.has(meal.name)) || fallback[0];
-    }
-
+    const selected = candidates.find((meal) => !chosenNames.has(meal.name)) || candidates[0];
     chosenNames.add(selected.name);
 
     return {
+      id: index,
       day: slot.day,
       mealType: slot.mealType,
       meal: selected
@@ -493,68 +519,191 @@ function generateWeekendPlan(preferences) {
   });
 }
 
-function renderPlan(plannedMeals) {
-  weekendPlanEl.innerHTML = "";
+function getCandidates(mealType, filters) {
+  const { ageMonths, foodsToAvoid, maxPrepTime, priorities, ingredientsAtHome } = filters;
 
+  const valid = MEALS.filter((meal) => {
+    const hasAvoidedFood = meal.ingredients.some((ingredient) =>
+      foodsToAvoid.some((avoid) => ingredient.toLowerCase().includes(avoid))
+    );
+    return (
+      meal.mealType === mealType &&
+      meal.ageMinMonths <= ageMonths &&
+      meal.ageMaxMonths >= ageMonths &&
+      !hasAvoidedFood
+    );
+  });
+
+  const strict = valid.filter((meal) => meal.prepTime <= maxPrepTime);
+  const pool = strict.length ? strict : valid;
+
+  return [...pool].sort((a, b) => scoreMeal(b, priorities, ingredientsAtHome) - scoreMeal(a, priorities, ingredientsAtHome));
+}
+
+function scoreMeal(meal, priorities, ingredientsAtHome) {
+  let score = 0;
+  priorities.forEach((priority) => {
+    if (meal.tags.includes(priority)) score += 3;
+  });
+
+  if (priorities.includes("use-at-home")) {
+    const hits = meal.ingredients.filter((item) => ingredientsAtHome.includes(item.toLowerCase())).length;
+    score += hits * 2;
+  }
+
+  score += Math.max(0, 40 - meal.prepTime) / 20;
+  return score;
+}
+
+function renderPlan(plannedMeals, preferences) {
   const groupedByDay = plannedMeals.reduce((acc, entry) => {
-    if (!acc[entry.day]) {
-      acc[entry.day] = [];
-    }
+    if (!acc[entry.day]) acc[entry.day] = [];
     acc[entry.day].push(entry);
     return acc;
   }, {});
 
+  weekendPlanEl.innerHTML = "";
+
   Object.entries(groupedByDay).forEach(([day, entries]) => {
-    const dayCard = document.createElement("article");
-    dayCard.className = "day-card";
-    dayCard.setAttribute("aria-label", day);
+    const section = document.createElement("article");
+    section.className = "day-section";
+    section.innerHTML = `<h3>${day}</h3>`;
 
-    dayCard.innerHTML = `<h3>${day}</h3>`;
-
-    entries.forEach(({ mealType, meal }) => {
-      const row = document.createElement("div");
-      row.className = "meal-row";
-      row.innerHTML = `
-        <span class="meal-type">${mealType}</span>
-        <div>
-          <p class="meal-name">${meal.name}</p>
-          <p class="meal-meta">${meal.prepTime} min · ${meal.ingredients.join(", ")}</p>
+    entries.forEach((entry) => {
+      const card = document.createElement("article");
+      card.className = "meal-card";
+      card.innerHTML = `
+        <div class="meal-head">
+          <p class="meal-type">${entry.mealType}</p>
+          <p class="meal-meta">Prep ${entry.meal.prepTime} min</p>
         </div>
+        <p class="meal-name">${entry.meal.name}</p>
+        <p class="meal-reason">${getMealReason(entry.meal, preferences)}</p>
+        <p class="meal-meta">Ingredients: ${entry.meal.ingredients.slice(0, 4).join(", ")}${entry.meal.ingredients.length > 4 ? "..." : ""}</p>
+        <div class="meal-actions">
+          <button class="meal-btn" type="button" data-action="toggle-steps" data-meal-id="${entry.id}" aria-expanded="false">Show steps</button>
+          <button class="meal-btn" type="button" data-action="swap-meal" data-meal-id="${entry.id}">Swap meal</button>
+        </div>
+        <ol class="meal-steps" id="meal-steps-${entry.id}" hidden>
+          ${entry.meal.steps.map((step) => `<li>${step}</li>`).join("")}
+        </ol>
       `;
-      dayCard.appendChild(row);
+
+      section.appendChild(card);
     });
 
-    weekendPlanEl.appendChild(dayCard);
+    weekendPlanEl.appendChild(section);
   });
 
   resultsEmptyEl.hidden = true;
   weekendPlanEl.hidden = false;
 }
 
-function renderShoppingList(items) {
-  currentShoppingItems = items;
+function getMealReason(meal, preferences) {
+  const matchedPriority = preferences.priorities.find((priority) => meal.tags.includes(priority));
+  if (matchedPriority) {
+    return `Chosen because it fits your “${formatPriorityLabel(matchedPriority)}” priority and stays toddler-friendly.`;
+  }
 
-  if (!items.length) {
-    shoppingListEl.hidden = true;
-    shoppingListEl.innerHTML = "";
-    shoppingEmptyEl.hidden = false;
-    shoppingEmptyEl.innerHTML = "<p>Great news — you already have all ingredients for this plan.</p>";
+  if (meal.prepTime <= preferences.maxPrepTime) {
+    return "Chosen because it matches your prep-time target and age range.";
+  }
+
+  return "Chosen as the closest age-appropriate backup option for this meal slot.";
+}
+
+function formatPriorityLabel(value) {
+  return value === "use-at-home" ? "Use what I already have" : value.replace("-", " ");
+}
+
+function toggleSteps(mealId, button) {
+  const stepsEl = document.querySelector(`#meal-steps-${mealId}`);
+  const isHidden = stepsEl.hidden;
+  stepsEl.hidden = !isHidden;
+  button.textContent = isHidden ? "Hide steps" : "Show steps";
+  button.setAttribute("aria-expanded", String(isHidden));
+}
+
+function swapMeal(mealId) {
+  const currentEntry = currentPlan.find((entry) => entry.id === mealId);
+  if (!currentEntry) return;
+
+  const ageMonths = Number(document.querySelector("#ageMonths").value);
+  const maxPrepTime = Number(document.querySelector("#maxPrepTime").value);
+  const priorities = getSelectedPriorities();
+  const ingredientsAtHome = parseCommaList(document.querySelector("#ingredientsAtHome").value);
+  const foodsToAvoid = parseCommaList(document.querySelector("#foodsToAvoid").value);
+
+  const candidates = getCandidates(currentEntry.mealType, {
+    ageMonths,
+    foodsToAvoid,
+    maxPrepTime,
+    priorities,
+    ingredientsAtHome
+  }).filter((meal) => meal.name !== currentEntry.meal.name);
+
+  if (!candidates.length) {
+    formMessageEl.textContent = `No alternate ${currentEntry.mealType} meal found with your settings.`;
+    formMessageEl.classList.add("error");
     return;
   }
 
-  shoppingListEl.innerHTML = items
-    .map(
-      (item, index) => `
-        <li>
-          <input id="shop-${index}" type="checkbox" />
-          <label for="shop-${index}">${item}</label>
-        </li>
-      `
-    )
+  currentEntry.meal = candidates[0];
+  renderPlan(currentPlan, { ageMonths, maxPrepTime, priorities });
+  currentShoppingGroups = buildGroupedShoppingList(currentPlan, ingredientsAtHome);
+  renderShoppingGroups(currentShoppingGroups);
+  renderPrepAhead(buildPrepAhead(currentPlan));
+  renderReuseTips(buildReuseTips(currentPlan));
+  formMessageEl.textContent = `${capitalize(currentEntry.mealType)} swapped.`;
+}
+
+function buildGroupedShoppingList(plannedMeals, ingredientsAtHome) {
+  const required = new Set(plannedMeals.flatMap(({ meal }) => meal.ingredients.map((item) => item.toLowerCase())));
+  ingredientsAtHome.forEach((item) => required.delete(item.toLowerCase()));
+
+  const grouped = { Fresh: [], Fridge: [], Cupboard: [], Freezer: [] };
+
+  [...required].sort().forEach((item) => {
+    const category = Object.entries(SHOPPING_CATEGORIES).find(([, words]) => words.includes(item))?.[0] || "Cupboard";
+    grouped[category].push(item);
+  });
+
+  return grouped;
+}
+
+function renderShoppingGroups(groups) {
+  const hasItems = Object.values(groups).some((items) => items.length);
+  if (!hasItems) {
+    shoppingGroupsEl.hidden = true;
+    shoppingGroupsEl.innerHTML = "";
+    shoppingEmptyEl.hidden = false;
+    shoppingEmptyEl.innerHTML = "<p>Great news — you already have everything for this plan.</p>";
+    return;
+  }
+
+  shoppingGroupsEl.innerHTML = Object.entries(groups)
+    .map(([group, items]) => {
+      if (!items.length) return "";
+      return `
+        <article class="shopping-group">
+          <h3>${group}</h3>
+          <p class="list-subtitle">${items.length} item${items.length === 1 ? "" : "s"}</p>
+          <ul>${items.map((item) => `<li>${item}</li>`).join("")}</ul>
+        </article>
+      `;
+    })
     .join("");
 
   shoppingEmptyEl.hidden = true;
-  shoppingListEl.hidden = false;
+  shoppingGroupsEl.hidden = false;
+}
+
+function buildShoppingCopyText(groups) {
+  return Object.entries(groups)
+    .filter(([, items]) => items.length)
+    .map(([group, items]) => `${group}
+${items.map((item) => `- ${item}`).join("\n")}`)
+    .join("\n\n");
 }
 
 function renderPrepAhead(items) {
@@ -570,35 +719,61 @@ function renderPrepAhead(items) {
   prepAheadEl.hidden = false;
 }
 
-function buildShoppingList(plannedMeals, ingredientsAtHome) {
-  const required = new Set(
-    plannedMeals.flatMap(({ meal }) => meal.ingredients.map((item) => item.toLowerCase()))
-  );
-  ingredientsAtHome.forEach((item) => required.delete(item.toLowerCase()));
+function renderReuseTips(items) {
+  if (!items.length) {
+    reuseTipsEl.hidden = true;
+    reuseTipsEl.innerHTML = "";
+    reuseEmptyEl.hidden = false;
+    return;
+  }
 
-  return [...required].sort();
+  reuseTipsEl.innerHTML = items.map((item) => `<li>${item}</li>`).join("");
+  reuseEmptyEl.hidden = true;
+  reuseTipsEl.hidden = false;
 }
 
 function buildPrepAhead(plannedMeals) {
-  const prepTips = new Set();
-
+  const tips = new Set();
   plannedMeals.forEach(({ meal }) => {
     if (meal.tags.includes("batch-cook")) {
-      prepTips.add(`Batch-cook a double portion of ${meal.name} for freezer-friendly leftovers.`);
+      tips.add(`Batch-cook ${meal.name} and save toddler-size portions for another day.`);
     }
-
-    if (meal.ingredients.includes("cooked rice")) {
-      prepTips.add("Cook extra plain rice on Friday evening and refrigerate for up to 2 days.");
+    if (meal.ingredients.includes("cooked rice") || meal.ingredients.includes("rice")) {
+      tips.add("Cook one big pot of rice on Friday night to use through the weekend.");
     }
-
-    if (meal.ingredients.some((item) => item.includes("carrot") || item.includes("zucchini"))) {
-      prepTips.add("Pre-chop and steam carrots/zucchini in advance to cut prep time.");
+    if (meal.ingredients.some((i) => ["carrot", "zucchini", "broccoli"].includes(i))) {
+      tips.add("Pre-chop and steam hard vegetables so weekend meals come together faster.");
     }
+  });
+  return [...tips];
+}
 
-    if (meal.mealType === "breakfast") {
-      prepTips.add("Wash and portion fruit ahead for quicker breakfast assembly.");
+function buildReuseTips(plannedMeals) {
+  const tips = [];
+  const saturdayDinner = plannedMeals.find((item) => item.day === "Saturday" && item.mealType === "dinner")?.meal;
+  const sundayLunch = plannedMeals.find((item) => item.day === "Sunday" && item.mealType === "lunch")?.meal;
+
+  if (saturdayDinner && sundayLunch) {
+    tips.push(`Make extra ${saturdayDinner.name} on Saturday and reuse leftovers in Sunday lunch sides.`);
+  }
+
+  const ingredientUse = new Map();
+  plannedMeals.forEach(({ meal, day, mealType }) => {
+    meal.ingredients.forEach((ingredient) => {
+      if (!ingredientUse.has(ingredient)) ingredientUse.set(ingredient, []);
+      ingredientUse.get(ingredient).push(`${day} ${mealType}`);
+    });
+  });
+
+  ingredientUse.forEach((uses, ingredient) => {
+    if (uses.length > 1 && tips.length < 4) {
+      tips.push(`Prep ${ingredient} once and reuse it across ${uses.slice(0, 2).join(" and ")}.`);
     }
   });
 
-  return [...prepTips];
+  return tips.slice(0, 4);
+}
+
+function capitalize(value) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
