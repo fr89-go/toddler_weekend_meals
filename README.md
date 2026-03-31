@@ -1,11 +1,3 @@
 # Toddler Weekend Meal Planner
 
-A minimal web app for planning breakfast, lunch, and dinner for Saturday and Sunday, then creating a copy-ready shopping list.
-
-## Run locally
-
-```bash
-python3 -m http.server 8000
-```
-
-Open `http://localhost:8000`.
+A simple web app that plans breakfast, lunch, and dinner for my 18-month-old daughter for Saturday and Sunday, and creates a shopping list from ingredients I already have and foods to avoid.
