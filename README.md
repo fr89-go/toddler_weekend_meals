@@ -60,3 +60,4 @@ Then open:
 
 - This is a planning helper with sample data, not medical advice.
 - Always cut food into toddler-safe sizes and check for allergy needs.
+Open `http://localhost:8000`.
