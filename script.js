@@ -370,14 +370,25 @@ const SLOTS = [
   { day: "Sunday", mealType: "dinner" }
 ];
 
+
 const form = document.querySelector("#planner-form");
-const resultsSection = document.querySelector("#results");
 const weekendPlanEl = document.querySelector("#weekendPlan");
 const shoppingListEl = document.querySelector("#shoppingList");
 const prepAheadEl = document.querySelector("#prepAhead");
+const formMessageEl = document.querySelector("#form-message");
+const resultsEmptyEl = document.querySelector("#results-empty");
+const shoppingEmptyEl = document.querySelector("#shopping-empty");
+const prepEmptyEl = document.querySelector("#prep-empty");
+const copyButton = document.querySelector("#copy-list");
+const copyStatusEl = document.querySelector("#copy-status");
+
+let currentShoppingItems = [];
 
 form.addEventListener("submit", (event) => {
   event.preventDefault();
+  formMessageEl.textContent = "";
+  formMessageEl.classList.remove("error");
+  copyStatusEl.textContent = "";
 
   const ageMonths = Number(document.querySelector("#ageMonths").value);
   const maxPrepTime = Number(document.querySelector("#maxPrepTime").value);
@@ -388,7 +399,8 @@ form.addEventListener("submit", (event) => {
   const foodsToAvoid = parseCommaList(document.querySelector("#foodsToAvoid").value);
 
   if (ageMonths < 12 || ageMonths > 24) {
-    alert("Please enter an age between 12 and 24 months.");
+    formMessageEl.textContent = "Please enter an age between 12 and 24 months.";
+    formMessageEl.classList.add("error");
     return;
   }
 
@@ -400,9 +412,30 @@ form.addEventListener("submit", (event) => {
     mealPreference
   });
 
-  renderPlan(plannedMeals, ingredientsAtHome);
-  resultsSection.classList.remove("hidden");
-  resultsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  renderPlan(plannedMeals);
+  renderShoppingList(buildShoppingList(plannedMeals, ingredientsAtHome));
+  renderPrepAhead(buildPrepAhead(plannedMeals));
+  formMessageEl.textContent = "Weekend plan updated.";
+  weekendPlanEl.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+copyButton.addEventListener("click", async () => {
+  if (!currentShoppingItems.length) {
+    copyStatusEl.textContent = "Nothing to copy yet.";
+    copyStatusEl.classList.add("error");
+    return;
+  }
+
+  const listText = currentShoppingItems.map((item) => `• ${item}`).join("\n");
+
+  try {
+    await navigator.clipboard.writeText(listText);
+    copyStatusEl.textContent = "Shopping list copied to clipboard.";
+    copyStatusEl.classList.remove("error");
+  } catch {
+    copyStatusEl.textContent = "Copy failed. Select and copy items manually.";
+    copyStatusEl.classList.add("error");
+  }
 });
 
 function parseCommaList(value) {
@@ -460,50 +493,81 @@ function generateWeekendPlan(preferences) {
   });
 }
 
-function renderPlan(plannedMeals, ingredientsAtHome) {
+function renderPlan(plannedMeals) {
   weekendPlanEl.innerHTML = "";
 
-  const grouped = plannedMeals.reduce((acc, item) => {
-    if (!acc[item.day]) acc[item.day] = [];
-    acc[item.day].push(item);
+  const groupedByDay = plannedMeals.reduce((acc, entry) => {
+    if (!acc[entry.day]) {
+      acc[entry.day] = [];
+    }
+    acc[entry.day].push(entry);
     return acc;
   }, {});
 
-  Object.entries(grouped).forEach(([day, meals]) => {
-    const daySection = document.createElement("article");
-    daySection.className = "meal-day";
-    daySection.innerHTML = `<h3>${day}</h3>`;
+  Object.entries(groupedByDay).forEach(([day, entries]) => {
+    const dayCard = document.createElement("article");
+    dayCard.className = "day-card";
+    dayCard.setAttribute("aria-label", day);
 
-    meals.forEach(({ mealType, meal }) => {
-      const mealCard = document.createElement("div");
-      mealCard.className = "meal-item";
+    dayCard.innerHTML = `<h3>${day}</h3>`;
 
-      const tags = meal.tags
-        .filter((tag) => ["quick", "nutritious", "low-mess", "batch-cook"].includes(tag))
-        .map((tag) => `<span class="badge">${tag}</span>`)
-        .join(" ");
-
-      mealCard.innerHTML = `
-        <h4>${capitalize(mealType)}: ${meal.name}</h4>
-        <p>${meal.description}</p>
-        <p><small>Estimated prep time: ${meal.prepTime} minutes</small></p>
-        <p><strong>Ingredients:</strong> ${meal.ingredients.join(", ")}</p>
-        <p><strong>Simple prep steps:</strong></p>
-        <ol>${meal.steps.map((step) => `<li>${step}</li>`).join("")}</ol>
-        <div>${tags}</div>
+    entries.forEach(({ mealType, meal }) => {
+      const row = document.createElement("div");
+      row.className = "meal-row";
+      row.innerHTML = `
+        <span class="meal-type">${mealType}</span>
+        <div>
+          <p class="meal-name">${meal.name}</p>
+          <p class="meal-meta">${meal.prepTime} min · ${meal.ingredients.join(", ")}</p>
+        </div>
       `;
-
-      daySection.appendChild(mealCard);
+      dayCard.appendChild(row);
     });
 
-    weekendPlanEl.appendChild(daySection);
+    weekendPlanEl.appendChild(dayCard);
   });
 
-  const shoppingList = buildShoppingList(plannedMeals, ingredientsAtHome);
-  shoppingListEl.innerHTML = shoppingList.map((item) => `<li>${item}</li>`).join("");
+  resultsEmptyEl.hidden = true;
+  weekendPlanEl.hidden = false;
+}
 
-  const prepAhead = buildPrepAhead(plannedMeals);
-  prepAheadEl.innerHTML = prepAhead.map((item) => `<li>${item}</li>`).join("");
+function renderShoppingList(items) {
+  currentShoppingItems = items;
+
+  if (!items.length) {
+    shoppingListEl.hidden = true;
+    shoppingListEl.innerHTML = "";
+    shoppingEmptyEl.hidden = false;
+    shoppingEmptyEl.innerHTML = "<p>Great news — you already have all ingredients for this plan.</p>";
+    return;
+  }
+
+  shoppingListEl.innerHTML = items
+    .map(
+      (item, index) => `
+        <li>
+          <input id="shop-${index}" type="checkbox" />
+          <label for="shop-${index}">${item}</label>
+        </li>
+      `
+    )
+    .join("");
+
+  shoppingEmptyEl.hidden = true;
+  shoppingListEl.hidden = false;
+}
+
+function renderPrepAhead(items) {
+  if (!items.length) {
+    prepAheadEl.hidden = true;
+    prepAheadEl.innerHTML = "";
+    prepEmptyEl.hidden = false;
+    return;
+  }
+
+  prepAheadEl.innerHTML = items.map((item) => `<li>${item}</li>`).join("");
+  prepEmptyEl.hidden = true;
+  prepAheadEl.hidden = false;
 }
 
 function buildShoppingList(plannedMeals, ingredientsAtHome) {
@@ -537,8 +601,4 @@ function buildPrepAhead(plannedMeals) {
   });
 
   return [...prepTips];
-}
-
-function capitalize(text) {
-  return text.charAt(0).toUpperCase() + text.slice(1);
 }

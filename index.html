@@ -7,63 +7,37 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <main class="container">
-      <header class="hero">
+    <main class="app-shell">
+      <header class="header">
+        <p class="eyebrow">Weekend planner</p>
         <h1>Toddler Weekend Meal Planner</h1>
-        <p>
-          Build a simple breakfast, lunch, and dinner plan for a child aged 12 to
-          24 months.
+        <p class="subtext">
+          Build a simple breakfast, lunch, and dinner plan for a child aged 12 to 24 months.
         </p>
       </header>
 
-      <section class="card">
-        <h2>Preferences</h2>
-        <form id="planner-form">
+      <section class="panel" aria-labelledby="preferences-title">
+        <h2 id="preferences-title">Preferences</h2>
+        <form id="planner-form" novalidate>
           <div class="grid">
             <label>
               Child age (months, 12-24)
-              <input
-                id="ageMonths"
-                name="ageMonths"
-                type="number"
-                min="12"
-                max="24"
-                value="18"
-                required
-              />
+              <input id="ageMonths" name="ageMonths" type="number" min="12" max="24" value="18" required />
             </label>
 
             <label>
               Ingredients already at home (comma separated)
-              <textarea
-                id="ingredientsAtHome"
-                name="ingredientsAtHome"
-                rows="3"
-                placeholder="oats, banana, eggs"
-              ></textarea>
+              <textarea id="ingredientsAtHome" name="ingredientsAtHome" rows="3" placeholder="oats, banana, eggs"></textarea>
             </label>
 
             <label>
               Foods to avoid (comma separated)
-              <textarea
-                id="foodsToAvoid"
-                name="foodsToAvoid"
-                rows="3"
-                placeholder="peanut butter, yogurt"
-              ></textarea>
+              <textarea id="foodsToAvoid" name="foodsToAvoid" rows="3" placeholder="peanut butter, yogurt"></textarea>
             </label>
 
             <label>
               Maximum prep time (minutes)
-              <input
-                id="maxPrepTime"
-                name="maxPrepTime"
-                type="number"
-                min="5"
-                max="120"
-                value="25"
-                required
-              />
+              <input id="maxPrepTime" name="maxPrepTime" type="number" min="5" max="120" value="25" required />
             </label>
 
             <label>
@@ -77,22 +51,41 @@
             </label>
           </div>
 
-          <button type="submit">Generate Weekend Plan</button>
-          <p class="hint">
-            Note: This planner uses built-in sample meals only (no external APIs).
-          </p>
+          <button type="submit" class="btn-primary">Generate Weekend Plan</button>
+          <p id="form-message" class="message" role="status" aria-live="polite"></p>
+          <p class="hint">Note: This planner uses built-in sample meals only (no external APIs).</p>
         </form>
       </section>
 
-      <section id="results" class="card hidden" aria-live="polite">
-        <h2>Your Weekend Plan</h2>
-        <div id="weekendPlan"></div>
+      <section class="panel" aria-labelledby="results-title">
+        <div class="section-heading">
+          <h2 id="results-title">Your Weekend Plan</h2>
+          <p>Breakfast, lunch, and dinner grouped by day.</p>
+        </div>
+        <div id="results-empty" class="empty-state">
+          <p>No plan yet. Set preferences and generate your weekend meals.</p>
+        </div>
+        <div id="weekendPlan" class="day-columns" hidden></div>
+      </section>
 
-        <h3>Combined Shopping List</h3>
-        <ul id="shoppingList"></ul>
+      <section class="panel" aria-labelledby="shopping-title">
+        <div class="section-heading">
+          <h2 id="shopping-title">Combined Shopping List</h2>
+          <button id="copy-list" class="btn-secondary" type="button">Copy list</button>
+        </div>
+        <p id="copy-status" class="message" role="status" aria-live="polite"></p>
+        <div id="shopping-empty" class="empty-state">
+          <p>Your shopping list will appear after meals are generated.</p>
+        </div>
+        <ul id="shoppingList" class="shopping-list" hidden></ul>
+      </section>
 
-        <h3>Prep Ahead</h3>
-        <ul id="prepAhead"></ul>
+      <section class="panel" aria-labelledby="prep-title">
+        <h2 id="prep-title">Prep Ahead</h2>
+        <div id="prep-empty" class="empty-state">
+          <p>Prep-ahead tips will appear once your plan is generated.</p>
+        </div>
+        <ul id="prepAhead" class="shopping-list" hidden></ul>
       </section>
     </main>
 
