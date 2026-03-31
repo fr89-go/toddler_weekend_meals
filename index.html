@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Toddler Weekend Meal Planner</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="hero">
+        <h1>Toddler Weekend Meal Planner</h1>
+        <p>
+          Build a simple breakfast, lunch, and dinner plan for a child aged 12 to
+          24 months.
+        </p>
+      </header>
+
+      <section class="card">
+        <h2>Preferences</h2>
+        <form id="planner-form">
+          <div class="grid">
+            <label>
+              Child age (months, 12-24)
+              <input
+                id="ageMonths"
+                name="ageMonths"
+                type="number"
+                min="12"
+                max="24"
+                value="18"
+                required
+              />
+            </label>
+
+            <label>
+              Ingredients already at home (comma separated)
+              <textarea
+                id="ingredientsAtHome"
+                name="ingredientsAtHome"
+                rows="3"
+                placeholder="oats, banana, eggs"
+              ></textarea>
+            </label>
+
+            <label>
+              Foods to avoid (comma separated)
+              <textarea
+                id="foodsToAvoid"
+                name="foodsToAvoid"
+                rows="3"
+                placeholder="peanut butter, yogurt"
+              ></textarea>
+            </label>
+
+            <label>
+              Maximum prep time (minutes)
+              <input
+                id="maxPrepTime"
+                name="maxPrepTime"
+                type="number"
+                min="5"
+                max="120"
+                value="25"
+                required
+              />
+            </label>
+
+            <label>
+              Meal preference
+              <select id="mealPreference" name="mealPreference">
+                <option value="quick">Quick</option>
+                <option value="nutritious">Nutritious</option>
+                <option value="low-mess">Low-mess</option>
+                <option value="batch-cook">Batch-cook</option>
+              </select>
+            </label>
+          </div>
+
+          <button type="submit">Generate Weekend Plan</button>
+          <p class="hint">
+            Note: This planner uses built-in sample meals only (no external APIs).
+          </p>
+        </form>
+      </section>
+
+      <section id="results" class="card hidden" aria-live="polite">
+        <h2>Your Weekend Plan</h2>
+        <div id="weekendPlan"></div>
+
+        <h3>Combined Shopping List</h3>
+        <ul id="shoppingList"></ul>
+
+        <h3>Prep Ahead</h3>
+        <ul id="prepAhead"></ul>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
