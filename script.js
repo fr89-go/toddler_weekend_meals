@@ -572,14 +572,27 @@ function renderPlan(plannedMeals, preferences) {
     entries.forEach((entry) => {
       const card = document.createElement("article");
       card.className = "meal-card";
+      const nutritionScore = getNutritionScore(entry.meal);
+      const ingredientsPreview = entry.meal.ingredients.slice(0, 4).join(", ");
       card.innerHTML = `
         <div class="meal-head">
-          <p class="meal-type">${entry.mealType}</p>
-          <p class="meal-meta">Prep ${entry.meal.prepTime} min</p>
+          <div class="meal-title-group">
+            <p class="meal-type">${entry.mealType}</p>
+            <p class="meal-name">${entry.meal.name}</p>
+          </div>
+          <div class="meal-stats">
+            <p class="meal-stat meal-stat-prep"><strong>Prep time</strong><span>${entry.meal.prepTime} min</span></p>
+            <p class="meal-stat meal-stat-nutrition"><strong>Nutrition score</strong><span>${nutritionScore}/10</span></p>
+          </div>
         </div>
-        <p class="meal-name">${entry.meal.name}</p>
-        <p class="meal-reason">${getMealReason(entry.meal, preferences)}</p>
-        <p class="meal-meta">Ingredients: ${entry.meal.ingredients.slice(0, 4).join(", ")}${entry.meal.ingredients.length > 4 ? "..." : ""}</p>
+        <div class="meal-image meal-image-${entry.mealType}">
+          <div class="meal-image-content">
+            <span class="meal-image-icon" aria-hidden="true">${getMealIcon(entry.mealType)}</span>
+            <span class="meal-image-caption">Recipe preview</span>
+          </div>
+        </div>
+        <p class="meal-description">${getMealReason(entry.meal, preferences)}</p>
+        <p class="meal-ingredients"><strong>Ingredients:</strong> ${ingredientsPreview}${entry.meal.ingredients.length > 4 ? "..." : ""}</p>
         <div class="meal-actions">
           <button class="meal-btn" type="button" data-action="toggle-steps" data-meal-id="${entry.id}" aria-expanded="false">Show steps</button>
           <button class="meal-btn" type="button" data-action="swap-meal" data-meal-id="${entry.id}">Swap meal</button>
@@ -597,6 +610,21 @@ function renderPlan(plannedMeals, preferences) {
 
   resultsEmptyEl.hidden = true;
   weekendPlanEl.hidden = false;
+}
+
+function getNutritionScore(meal) {
+  let score = 6;
+  if (meal.tags.includes("nutritious")) score += 2;
+  if (meal.ingredients.length >= 4) score += 1;
+  if (meal.tags.includes("low-mess")) score += 1;
+  if (meal.prepTime > 30) score -= 1;
+  return Math.max(1, Math.min(10, score));
+}
+
+function getMealIcon(mealType) {
+  if (mealType === "breakfast") return "☀️";
+  if (mealType === "lunch") return "🥗";
+  return "🍲";
 }
 
 function getMealReason(meal, preferences) {
